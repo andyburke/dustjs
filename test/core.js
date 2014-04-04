@@ -49,6 +49,21 @@ exports.coreSetup = function(suite, auto) {
     });
   });
 
+  suite.test("compileFn", function() {
+    var unit = this,
+        tmpl = dust.compileFn('Hello World');
+    tmpl({}, function(err, out) {
+      try {
+        unit.ifError(err);
+        unit.equals(out, "Hello World");
+      } catch(err) {
+        unit.fail(err);
+        return;
+      }
+      unit.pass();
+    });
+  });
+
   suite.test("renderSource (stream)", function() {
     var unit = this;
     dust.renderSource('Hello World', {}).on('data', function(data) {
@@ -102,6 +117,26 @@ exports.coreSetup = function(suite, auto) {
     }).on('error', function(err) {
       unit.fail(err);
     });
+  });
+
+  suite.test("indexInArray", function() {
+    var unit = this,
+        arr = ["hello", "world"],
+        nativeIndexOf = Array.prototype.indexOf,
+        indexOf;
+    indexOf = dust.indexInArray(arr, "world");
+    unit.equals(indexOf, 1);
+    indexOf = dust.indexInArray(arr, "foo");
+    unit.equals(indexOf, -1);
+    Array.prototype.indexOf = undefined;
+    // test indexOf when the array indexOf function is undefined (IE lte 8)
+    indexOf = dust.indexInArray(arr, "world");
+    unit.equals(indexOf, 1);
+    indexOf = dust.indexInArray(arr, "foo");
+    unit.equals(indexOf, -1);
+    Array.prototype.indexOf = nativeIndexOf;
+    unit.notEquals(Array.prototype.indexOf, undefined);
+    unit.pass();
   });
 }
 

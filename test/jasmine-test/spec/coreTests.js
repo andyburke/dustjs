@@ -27,6 +27,12 @@ var coreTests = [
         message: "should test the stream rendering"
       },
       {
+        name: undefined,
+        source: "compilation_failure",
+        error: "Template name parameter cannot be undefined when calling dust.compile",
+        message: "if the name is not there compilation should be failed, unless it is called from renderSource"
+      },
+      {
         name:     "hello_world",
         source:   "Hello World!",
         context:  {},
@@ -607,7 +613,7 @@ var coreTests = [
       {
         name: "array reference $idx/$len not changed in nested object",
         source: "{#results}{#info}{$idx}{name}-{$len} {/info}{/results}",
-        context:  { results: [ {info: {name: "Steven"}  },  {info: {name: "Richard"} } ]  },
+        context:  {results: [{info: {name: "Steven"}},{info: {name: "Richard"}}]},
         expected: "0Steven-2 1Richard-2 ",
         message: "test array reference $idx/$len not changed in nested object"
       },
@@ -920,13 +926,6 @@ var coreTests = [
         message: "should test the filter tag"
       },
       {
-        name:     "invalid filter",
-        source:   "{obj|nullcheck|invalid}",
-        context:  { obj: "test" },
-        error:    "Invalid filter [nullcheck]",
-        message: "should fail hard for invalid filter"
-      },
-      {
         name:     "escapeJs filter without DQ",
         source:   "{obj|j|s}",
         context:  { obj: "<script>\\testBS\\ \rtestCR\r \u2028testLS\u2028 \u2029testPS\u2029 \ntestNL\n \ftestLF\f 'testSQ' \ttestTB\t /testFS/</script>" },
@@ -1184,6 +1183,21 @@ var coreTests = [
         expected: "Hello ! You have  new messages.",
         message: "should render the helper with missing global context"
       },
+      {
+        name: "partial stepping into context that does not exist",
+        source: [
+          '{#loadPartialTl}{/loadPartialTl}',
+          '{>partialTl:contextDoesNotExist/}'
+        ].join('\n'),
+        context: {
+          loadPartialTl : function(chunk, context, bodies, params) {
+            dust.loadSource(dust.compile('{.value}{.value.childValue.anotherChild}{name.nested}{$idx} ', 'partialTl'));
+            return chunk;
+          }
+        },
+        expected: " ",
+        message: "Should gracefully handle stepping into context that does not exist"
+      }
     ]
   },
 /**
@@ -1770,20 +1784,22 @@ var coreTests = [
  * INVALID HELPER TESTS
  */
   {
-    name:"invalid helper test",
+    name: "debugger tests",
     tests: [
       {
         name:     "non-existing helper",
         source:   "some text {@notfound}foo{/notfound} some text",
         context:  {},
-        error: "Invalid helper [notfound]",
+        log: "Invalid helper [notfound]",
         message: "Should crash the application if a helper is not found"
-      }
-    ]
-  },
-  {
-    name: "debugger tests",
-    tests: [
+      },
+      {
+        name:     "invalid filter",
+        source:   "{obj|nullcheck|invalid}",
+        context:  { obj: "test" },
+        log:    "Invalid filter [nullcheck]",
+        message: "should fail hard for invalid filter"
+      },
       {
         name: "Using unescape filter",
         source:"{test|s}",
@@ -1832,6 +1848,42 @@ var coreTests = [
         context: {"exists": "example text"},
         log: "Not rendering not exists (^) block check in template [No render for not exists], because above key was found",
         message: "test the log messages for an existing not exists check."
+      },
+      {
+        name: "Errors should be propogated if the silenceErrors flag is not set",
+        source: "{#errorHelper}{/errorHelper}",
+        context: { "errorHelper" : function(chunk, context, bodies, params)
+                   {
+                     dust.debugLevel = 'NONE';
+                     throw new Error('Error should be visible');
+                     return chunk.write('');
+                   }
+                 },
+        error: "Error should be visible",
+        message: "test to make sure errors are not swallowed."
+      },
+      {
+        name: "Errors should not be propogated when the silenceErrors is set to true",
+        source: "Error should NOT be visible{#errorHelper}{/errorHelper}",
+        context: { "error":  {
+                     "errorHelper" : function(chunk, context, bodies, params)
+                     {
+                       dust.debugLevel = 'NONE';
+                       dust.silenceErrors = true;
+                       throw new Error('Error message');
+                       return chunk.write('');
+                     }
+                   }
+                 },
+        expected: "Error should NOT be visible",
+        message: "test to make sure non dust errors are swallowed when the silenceErrors flag is set."
+      },
+      {
+        name: "Errors should be throwable from helpers",
+        source: "{@error errorMessage=\"helper error\"}{/error}",
+        context: { },
+        error: "helper error",
+        message: "test to make sure errors are properly caught and thrown when thrown from helpers."
       }
     ]
   }
@@ -1840,5 +1892,5 @@ var coreTests = [
 if (typeof module !== "undefined" && typeof require !== "undefined") {
     module.exports = coreTests; // We're on node.js
 } else {
-    window.coreTests = coreTests; // We're on the browser
+    this['coreTests'] = coreTests; // Set it up as global  - browser or rhino
 }

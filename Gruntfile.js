@@ -36,6 +36,12 @@ module.exports = function(grunt) {
         options: {
           stdout: true
         }
+      },
+      gitAddArchive: {
+        command: 'git add <%= compress.distTarBall.options.archive %> <%= compress.distZip.options.archive %>',
+        options: {
+          stdout: true
+        }
       }
     },
     concat: {
@@ -162,7 +168,9 @@ module.exports = function(grunt) {
     bump: {
       options: {
         files: ['package.json', 'bower.json'],
-        updateConfigs: ['pkg']
+        updateConfigs: ['pkg'],
+        push: false,
+        commitFiles: ['-a']
       }
     },
     log: {
@@ -186,10 +194,43 @@ module.exports = function(grunt) {
           message: ['OK. Done bumping, adding, committing, tagging and pushing the new version',
                     '',
                     'You still need to manually do the following:',
+                    '  * git push upstream && git push upstream --tags',
                     '  * npm publish'].join('\n')
         }
       }
+    },
+    testRhino : {
+      files: ['test/rhino/lib/**/*.jar']
     }
+  });
+
+  grunt.registerMultiTask('testRhino', function(){
+    var shellTaskConfig = grunt.config.get('shell'),
+      commandList= [];
+
+    //iterate over rhino jars - list is defined in task config
+    this.files.forEach(function(fileGroup) {
+      fileGroup.src.forEach(function(rhinoJar) {
+        commandList.push('java -jar ' + rhinoJar + ' -f test/rhino/rhinoTest.js');
+      });
+    });
+
+    grunt.log.ok(JSON.stringify(commandList));
+
+    shellTaskConfig['rhinoTests'] = {
+      command : commandList.join('&&'),
+      options: {
+        stdout: true,
+        callback: function(err, stdout, stderr, cb) {
+         if(err || stderr){
+           grunt.warn('There are failing unit tests in Rhino');
+         }
+          cb();
+        }
+      }
+    };
+    grunt.config.set('shell', shellTaskConfig);
+    grunt.task.run('shell:rhinoTests');
   });
 
   // These plugins provide necessary tasks.
@@ -209,13 +250,16 @@ module.exports = function(grunt) {
   // Npm tasks
   grunt.registerTask('default', ['build']);
   grunt.registerTask('build', ['clean:build', 'jshint', 'shell:buildParser','concat', 'uglify']);
-  grunt.registerTask('test', ['clean:specRunner', 'build', 'jasmine', 'shell:oldTests']);
+
+  grunt.registerTask('test', ['clean:specRunner', 'build', 'jasmine', 'shell:oldTests', 'testRhino']);
+  grunt.registerTask('testNode', ['shell:oldTests']);
   grunt.registerTask('testClient', ['build', 'jasmine:allTests:build', 'log:testClient', 'connect:testServer']);
+
 
   grunt.registerTask('copyForRelease', ['clean:dist', 'copy:core', 'copy:coreMin', 'copy:full', 'copy:fullMin', 'copy:license', 'log:copyForRelease']);
   grunt.registerTask('buildRelease', ['test', 'copyForRelease', 'compress']);
-  grunt.registerTask('releasePatch', ['bump-only:patch', 'buildRelease', 'bump-commit:patch', 'log:release']);
-  grunt.registerTask('releaseMinor', ['bump-only:minor', 'buildRelease', 'bump-commit:minor', 'log:release']);
+  grunt.registerTask('releasePatch', ['bump-only:patch', 'buildRelease', 'shell:gitAddArchive', 'bump-commit', 'log:release']);
+  grunt.registerTask('releaseMinor', ['bump-only:minor', 'buildRelease', 'shell:gitAddArchive', 'bump-commit', 'log:release']);
   // major release should probably be done with care
   // grunt.registerTask('releaseMajor', ['bump-only:major', 'buildRelease', 'bump-commit:major', 'log:release']);
 
