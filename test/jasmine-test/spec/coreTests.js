@@ -510,6 +510,16 @@ var coreTests = [
         context:  { title: "Sir", names: [] },
         expected: "",
         message: "should test an empty array"
+      },
+      {
+        name:     "empty params in helper",
+        source:   "{#emptyParamHelper}{/emptyParamHelper}",
+        context:  { "emptyParamHelper" : function(chunk, context, bodies, params) {
+                      return chunk.write(params.foo);
+                    }
+                  },
+        expected: "",
+        message: "should output nothing, but no error should fire"
       }
     ]
   },
@@ -958,7 +968,7 @@ var coreTests = [
 /**
  * PARTIAL DEFINITIONS TESTS
  */
-  { 
+  {
     name: "partial definitions",
     tests: [
       {
@@ -1237,6 +1247,13 @@ var coreTests = [
         context:  { helper: function(chunk, context, bodies, params) { return chunk.write(params['data-foo']); } },
         expected: "dashes",
         message: "should test parameters with dashes"
+      },
+      {
+	name:     "inline params as dust function",
+	source:   "{#section a=\"{b}\"}{#a}Hello, {.}!{/a}{/section}",
+	context:  {"section": true, "b": "world"},
+	expected: "Hello, world!",
+	message: "Inline params that evaluate to a dust function should evaluate their body"
       }
     ]
   },
@@ -1312,13 +1329,13 @@ var coreTests = [
         context: {
                    foo: {
                      foobar: 'Foo Bar',
-                     bar: function () {
+                     bar: function biz() {
                        return this.foobar;
                      }
                    }
                  },
         expected: "Hello Foo Bar World!",
-        message: "should test scope of context function"
+        message: "should test that a non-chunk return value is used for truthiness"
       },
       {
         name: "test that function that do not return chunk and return falsy are treated as falsy",
@@ -1368,7 +1385,7 @@ var coreTests = [
                       }
                     },
           expected: "Hello Foo Bar World!",
-          message: "should test scope of context function"
+          message: "should test that function returning object is resolved"
         }
     ]
   },
@@ -1389,7 +1406,7 @@ var coreTests = [
         name:     "error: whitespaces between the opening brace and any of (#,?,@,^,+,%) is not allowed",
         source:   '{ # helper foo="bar" boo="boo" } {/helper}',
         context:  { "helper": function(chunk, context, bodies, params) { return chunk.write(params.boo + " " + params.foo); } },
-        error: 'Expected buffer, comment, partial, raw, reference, section or special but "{" found. At line : 1, column : 1',
+        error: 'Expected buffer, comment, end of input, partial, raw, reference, section or special but "{" found. At line : 1, column : 1',
         message: "should show an error for whitespces between the opening brace and any of (#,?,@,^,+,%)"
       },
       {
@@ -1417,7 +1434,7 @@ var coreTests = [
         name:     "error: whitespaces between the forward slash and the closing brace in self closing tags",
         source:   '{#helper foo="bar" boo="boo" / }',
         context:  { "helper": function(chunk, context, bodies, params) { return chunk.write(params.boo + " " + params.foo); } },
-        error: 'Expected buffer, comment, partial, raw, reference, section or special but "{" found. At line : 1, column : 1',
+        error: 'Expected buffer, comment, end of input, partial, raw, reference, section or special but "{" found. At line : 1, column : 1',
         message: "should show an error for whitespaces  etween the forward slash and the closing brace in self closing tags"
       },
       {
@@ -1431,7 +1448,7 @@ var coreTests = [
         name: "error : whitespaces between the '{' plus '>' and partial identifier is not supported",
         source: '{ > partial/} {> "hello_world"/} {> "{ref}"/}',
         context: { "name": "Jim", "count": 42, "ref": "hello_world" },
-        error: 'Expected buffer, comment, partial, raw, reference, section or special but "{" found. At line : 1, column : 1',
+        error: 'Expected buffer, comment, end of input, partial, raw, reference, section or special but "{" found. At line : 1, column : 1',
         message: "should show an error for whitespaces between the '{' plus '>' and partial identifier"
       },
       {
@@ -1531,7 +1548,7 @@ var coreTests = [
         name: "Dust syntax error",
         source: "RRR {##}",
         context: { name: "Mick", count: 30 },
-        error: 'Expected buffer, comment, partial, raw, reference, section or special but "{" found. At line : 1, column : 5',
+        error: 'Expected buffer, comment, end of input, partial, raw, reference, section or special but "{" found. At line : 1, column : 5',
         message: "should test that the error message shows line and column."
       },
       {
@@ -1658,7 +1675,21 @@ var coreTests = [
         context: {},
         error: 'Expected end tag for tags but it was not found. At line : 8, column : 9',
         message: "should test the errors message for Conditional without end tag."
-      }
+      },
+      {
+        name: "Helper syntax error. TypeError",
+        source:"{#hello/}",
+        context: {"hello":function() { var a; a.slice(1); }},
+        error: "undefined",
+        message: "should test helper syntax errors being handled gracefully"
+      },
+      {
+        name: "Helper syntax error. async TypeError",
+        source:"{#hello/}",
+        context: {"hello":function(chunk, context, bodies, params) { return chunk.map(function(chunk) { var a; a.slice(1); chunk.end(); })}},
+        error: "undefined",
+        message: "should test helper syntax errors inside an async block being handled gracefully"
+       }
     ]
   },
 /**
@@ -1801,27 +1832,6 @@ var coreTests = [
         message: "should fail hard for invalid filter"
       },
       {
-        name: "Using unescape filter",
-        source:"{test|s}",
-        context: {"test": "example text"},
-        log: "Using unescape filter on [example text]",
-        message: "test the log messages for an unescape filter."
-      },
-      {
-        name: "Reference lookup",
-        source:"{test}",
-        context: {"test": "example text"},
-        log: "Searching for reference [{test}] in template [Reference lookup]",
-        message: "test the log messages for a reference lookup."
-      },
-      {
-        name: "Reference lookup with dots",
-        source:"{test.anotherTest}",
-        context: {"test": "example text"},
-        log: "Searching for reference [{test.anotherTest}] in template [Reference lookup with dots]",
-        message: "test the log messages for a reference lookup."
-      },
-      {
         name: "Reference not found",
         source:"{wrongTest}",
         context: {"test": "example text"},
@@ -1850,40 +1860,11 @@ var coreTests = [
         message: "test the log messages for an existing not exists check."
       },
       {
-        name: "Errors should be propogated if the silenceErrors flag is not set",
-        source: "{#errorHelper}{/errorHelper}",
-        context: { "errorHelper" : function(chunk, context, bodies, params)
-                   {
-                     dust.debugLevel = 'NONE';
-                     throw new Error('Error should be visible');
-                     return chunk.write('');
-                   }
-                 },
-        error: "Error should be visible",
-        message: "test to make sure errors are not swallowed."
-      },
-      {
-        name: "Errors should not be propogated when the silenceErrors is set to true",
-        source: "Error should NOT be visible{#errorHelper}{/errorHelper}",
-        context: { "error":  {
-                     "errorHelper" : function(chunk, context, bodies, params)
-                     {
-                       dust.debugLevel = 'NONE';
-                       dust.silenceErrors = true;
-                       throw new Error('Error message');
-                       return chunk.write('');
-                     }
-                   }
-                 },
-        expected: "Error should NOT be visible",
-        message: "test to make sure non dust errors are swallowed when the silenceErrors flag is set."
-      },
-      {
-        name: "Errors should be throwable from helpers",
+        name: "Errors should be throwable from helpers and consumed in the render callback/stream onerror",
         source: "{@error errorMessage=\"helper error\"}{/error}",
         context: { },
         error: "helper error",
-        message: "test to make sure errors are properly caught and thrown when thrown from helpers."
+        message: "test to make sure errors are properly caught and propogated to the callbacks."
       }
     ]
   }
