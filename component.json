@@ -1,5 +1,5 @@
 {
-  "name": "dustjs",
+  "name": "dustjs-linkedin",
   "version": "2.5.1",
   "author": "Aleksander Williams",
   "description": "Asynchronous templates for the browser and node.js ( LinkedIn fork )",
